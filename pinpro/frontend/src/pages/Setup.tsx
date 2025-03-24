@@ -6,14 +6,14 @@ const clubs = [
   '7 Iron', '8 Iron', '9 Iron', 'Pitching Wedge', 'Sand Wedge', 'Lob Wedge',
 ];
 
-const userId = localStorage.getItem('userId') || 'sidd123'; // replace later with real auth
+const userId = localStorage.getItem('userId') || 'guest_user';
 
 const Setup = () => {
   const [yardages, setYardages] = useState<Record<string, number>>({});
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`http://localhost:5000/api/clubs/${userId}`)
+    fetch(`http://localhost:5050/api/clubs/${userId}`)
       .then((res) => res.json())
       .then((data) => {
         if (!data.error) {
@@ -23,18 +23,15 @@ const Setup = () => {
       .catch((err) => console.error('Error fetching clubs:', err));
   }, []);
 
-  const handleChange = (club: string, value: number) => {
-    const updated = { ...yardages, [club]: value };
-    setYardages(updated);
-
-    fetch('http://localhost:5000/api/clubs/save', {
+  const saveToBackend = (clubsData: Record<string, number>, message = 'Saved ✅') => {
+    fetch('http://localhost:5050/api/clubs/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, clubs: updated }),
+      body: JSON.stringify({ userId, clubs: clubsData }),
     })
       .then((res) => res.json())
       .then(() => {
-        setStatus('Saved ✅');
+        setStatus(message);
         setTimeout(() => setStatus(null), 1500);
       })
       .catch((err) => {
@@ -43,37 +40,21 @@ const Setup = () => {
       });
   };
 
+  const handleChange = (club: string, value: number) => {
+    const updated = { ...yardages, [club]: value };
+    setYardages(updated);
+    saveToBackend(updated);
+  };
+
   const handleReset = () => {
     const cleared: Record<string, number> = {};
     clubs.forEach((club) => (cleared[club] = 0));
     setYardages(cleared);
-
-    fetch('http://localhost:5000/api/clubs/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, clubs: cleared }),
-    })
-      .then(() => setStatus('Clubs reset ✅'))
-      .catch((err) => {
-        console.error('Error resetting clubs:', err);
-        setStatus('Reset failed ❌');
-      });
+    saveToBackend(cleared, 'Clubs reset ✅');
   };
 
   const handleManualSave = () => {
-    fetch('http://localhost:5000/api/clubs/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, clubs: yardages }),
-    })
-      .then(() => {
-        setStatus('Saved ✅');
-        setTimeout(() => setStatus(null), 1500);
-      })
-      .catch((err) => {
-        console.error('Error saving manually:', err);
-        setStatus('Save failed ❌');
-      });
+    saveToBackend(yardages, 'Saved ✅');
   };
 
   return (

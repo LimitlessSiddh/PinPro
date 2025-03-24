@@ -13,9 +13,10 @@ const StartRound = () => {
   const [roundFinished, setRoundFinished] = useState(false);
   const [score, setScore] = useState(0);
   const [selectingHoles, setSelectingHoles] = useState(true);
+  const [courseName, setCourseName] = useState<string>('');
 
   useEffect(() => {
-    fetch(`http://localhost:5000/api/clubs/${userId}`)
+    fetch(`http://localhost:5050/api/clubs/${userId}`)
       .then((res) => res.json())
       .then((data) => setYardages(data))
       .catch((err) => console.error('Error fetching clubs:', err));
@@ -29,11 +30,17 @@ const StartRound = () => {
       return;
     }
 
-    const club = Object.entries(yardages).find(
-      ([, yards]) => typeof yards === 'number' && distance >= yards - 10 && distance <= yards + 10
-    );
+    const sorted = Object.entries(yardages)
+      .filter(([, yards]) => typeof yards === 'number')
+      .sort((a, b) => a[1] - b[1]);
 
-    const selectedClub = club ? club[0] : 'No club matches — maybe chip it?';
+    const club = sorted.find(([, yards]) => yards >= distance);
+    const selectedClub = club
+      ? club[0]
+      : sorted.length > 0
+        ? sorted[sorted.length - 1][0]
+        : 'No clubs set';
+
     setSuggestedClub(selectedClub);
   };
 
@@ -47,11 +54,10 @@ const StartRound = () => {
 
   const handleFinishRound = () => {
     setRoundFinished(true);
-
     const par = totalHoles === 9 ? 36 : 72;
     const finalScore = score - par;
 
-    fetch('http://localhost:5000/api/rounds/save', {
+    fetch('http://localhost:5050/api/rounds/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -61,6 +67,7 @@ const StartRound = () => {
         finalScore,
         par,
         shotData: shots,
+        courseName,
       }),
     })
       .then((res) => res.json())
@@ -88,7 +95,14 @@ const StartRound = () => {
       <>
         <Navbar />
         <div className="min-h-screen flex flex-col items-center justify-center text-center p-6">
-          <h1 className="text-3xl font-bold text-primary mb-6">How many holes are you playing?</h1>
+          <h1 className="text-3xl font-bold text-primary mb-4">Course & Holes</h1>
+          <input
+            type="text"
+            placeholder="Enter course name"
+            value={courseName}
+            onChange={(e) => setCourseName(e.target.value)}
+            className="border border-gray-300 p-2 rounded-md mb-4 w-80 text-center"
+          />
           <div className="flex gap-6">
             <button
               onClick={() => {
@@ -118,7 +132,9 @@ const StartRound = () => {
     <>
       <Navbar />
       <div className="min-h-screen px-6 py-10 flex flex-col items-center">
-        <h1 className="text-3xl font-bold text-primary mb-2">Hole {hole} of {totalHoles}</h1>
+        <h1 className="text-3xl font-bold text-primary mb-2">
+          Hole {hole} of {totalHoles} at {courseName || 'Unknown Course'}
+        </h1>
 
         {!roundFinished && (
           <div className="w-full max-w-md space-y-4">
@@ -183,6 +199,7 @@ const StartRound = () => {
             <p className="text-lg text-gray-700 mt-2">
               Final Score: <span className="font-semibold">{score} shots</span> → {finalScore >= 0 ? `+${finalScore}` : finalScore} (Par {par})
             </p>
+            <p className="text-gray-600 mt-1 italic">Played at {courseName || 'Unknown Course'}</p>
           </div>
         )}
       </div>
