@@ -1,3 +1,4 @@
+// src/components/ProtectedRoute.tsx
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import Loader from './Loader';
@@ -11,17 +12,16 @@ const ProtectedRoute = ({ children }: Props) => {
   const [authenticated, setAuthenticated] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('token') || localStorage.getItem('firebaseToken');
 
-    // Simulate loading delay (e.g., for real API call or smoother UI)
     setTimeout(() => {
       setAuthenticated(!!token);
       setLoading(false);
-    }, 500); // 0.5s delay
+    }, 500); // Simulated delay
   }, []);
 
   if (loading) return <Loader />;
-  return authenticated ? children : <Navigate to="/login" />;
+  return authenticated ? children : <Navigate to="/login" replace />;
 };
 
 export default ProtectedRoute;

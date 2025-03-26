@@ -42,7 +42,7 @@ const Profile = () => {
     : 0;
 
   const chartData = {
-    labels: rounds.map((r, i) => `Round ${i + 1}`),
+    labels: rounds.map((_r, i) => `Round ${i + 1}`),
     datasets: [
       {
         label: 'Final Score',
@@ -65,8 +65,12 @@ const Profile = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
             <div className="bg-white shadow-lg rounded-lg p-6 border border-gray-200">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">🔐 User Info</h2>
-              <p className="text-gray-700 mb-2">User ID: <span className="italic text-gray-600">{userId}</span></p>
-              <p className="text-gray-700">Rounds Played: <span className="font-semibold">{totalRounds}</span></p>
+              <p className="text-gray-700 mb-2">
+                User ID: <span className="italic text-gray-600">{userId}</span>
+              </p>
+              <p className="text-gray-700">
+                Rounds Played: <span className="font-semibold">{totalRounds}</span>
+              </p>
             </div>
 
             <div
@@ -75,12 +79,14 @@ const Profile = () => {
             >
               <h2 className="text-xl font-semibold text-gray-800 mb-4">📊 Stats Summary</h2>
               <p className="text-gray-700 mb-2">
-                Best Score: <span className={bestScore >= 0 ? 'text-red-500' : 'text-green-600'}>
+                Best Score:{' '}
+                <span className={bestScore >= 0 ? 'text-red-500' : 'text-green-600'}>
                   {bestScore >= 0 ? `+${bestScore}` : bestScore}
                 </span>
               </p>
               <p className="text-gray-700">
-                Average Score: <span className={averageScore >= 0 ? 'text-red-500' : 'text-green-600'}>
+                Average Score:{' '}
+                <span className={averageScore >= 0 ? 'text-red-500' : 'text-green-600'}>
                   {averageScore >= 0 ? `+${averageScore}` : averageScore}
                 </span>
               </p>
@@ -110,7 +116,9 @@ const Profile = () => {
                 {rounds.map(round => (
                   <tr key={round.id} className="hover:bg-gray-50">
                     <td className="p-3 border">{new Date(round.created_at).toLocaleDateString()}</td>
-                    <td className="p-3 border">{round.course_name || '—'}</td>
+                    <td className="p-3 border font-semibold italic text-blue-600">
+                      {round.course_name || '—'}
+                    </td>
                     <td className="p-3 border">{round.total_holes}</td>
                     <td className="p-3 border">{round.shots}</td>
                     <td className={`p-3 border font-medium ${round.final_score >= 0 ? 'text-red-600' : 'text-green-600'}`}>
@@ -120,7 +128,9 @@ const Profile = () => {
                 ))}
                 {rounds.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="text-center p-4 text-gray-500 italic">No rounds yet</td>
+                    <td colSpan={5} className="text-center p-4 text-gray-500 italic">
+                      No rounds yet
+                    </td>
                   </tr>
                 )}
               </tbody>
