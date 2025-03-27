@@ -1,4 +1,3 @@
-// backend/controllers/authController.ts
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
@@ -73,9 +72,10 @@ export const syncFirebaseUser = async (req: Request, res: Response): Promise<voi
   }
 
   try {
+    // Step 1: Check if user already exists via UID
     const existing = await pool.query(
-      'SELECT id, username FROM users WHERE firebase_uid = $1 OR username = $2',
-      [uid, email]
+      'SELECT id, username FROM users WHERE firebase_uid = $1',
+      [uid]
     );
 
     if (existing.rows.length > 0) {
@@ -84,15 +84,43 @@ export const syncFirebaseUser = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    const result = await pool.query(
-      'INSERT INTO users (username, firebase_uid) VALUES ($1, $2) RETURNING id, username',
+    // Step 2: Try to insert new Firebase user
+    const insertResult = await pool.query(
+      `INSERT INTO users (username, firebase_uid)
+       VALUES ($1, $2)
+       ON CONFLICT (username) DO NOTHING
+       RETURNING id, username`,
       [email, uid]
     );
 
-    const user = result.rows[0];
-    res.status(201).json({ userId: user.id, username: user.username });
+    if (insertResult.rows.length > 0) {
+      const user = insertResult.rows[0];
+      res.status(201).json({ userId: user.id, username: user.username });
+      return;
+    }
+
+    // Step 3: Fallback if conflict (user exists with same email as username)
+    const fallback = await pool.query(
+      'SELECT id, username FROM users WHERE username = $1',
+      [email]
+    );
+
+    if (fallback.rows.length > 0) {
+      const user = fallback.rows[0];
+
+      // OPTIONAL: Update firebase_uid for existing email user (only once)
+      await pool.query(
+        'UPDATE users SET firebase_uid = $1 WHERE id = $2',
+        [uid, user.id]
+      );
+
+      res.status(200).json({ userId: user.id, username: user.username });
+      return;
+    }
+
+    throw new Error('Could not sync or resolve Firebase user.');
   } catch (error) {
-    console.error('Error syncing Firebase user:', error);
+    console.error('❌ Error syncing Firebase user:', error);
     res.status(500).json({ error: 'Failed to sync Firebase user' });
   }
 };

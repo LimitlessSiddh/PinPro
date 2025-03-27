@@ -1,10 +1,9 @@
 // src/components/ProtectedRoute.tsx
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState, ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
-import Loader from './Loader';
 
 interface Props {
-  children: React.ReactElement;
+  children: ReactNode;
 }
 
 const ProtectedRoute = ({ children }: Props) => {
@@ -14,14 +13,24 @@ const ProtectedRoute = ({ children }: Props) => {
   useEffect(() => {
     const token = localStorage.getItem('token') || localStorage.getItem('firebaseToken');
 
-    setTimeout(() => {
-      setAuthenticated(!!token);
-      setLoading(false);
-    }, 500); // Simulated delay
+    // No simulated delay needed unless for UX
+    setAuthenticated(!!token);
+    setLoading(false);
   }, []);
 
-  if (loading) return <Loader />;
-  return authenticated ? children : <Navigate to="/login" replace />;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-xl font-semibold text-gray-600">
+        Loading...
+      </div>
+    );
+  }
+
+  if (!authenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
 };
 
 export default ProtectedRoute;

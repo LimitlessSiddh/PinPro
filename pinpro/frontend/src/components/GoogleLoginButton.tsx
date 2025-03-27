@@ -25,12 +25,12 @@ const GoogleLoginButton = () => {
       });
 
       const data = await res.json();
+      console.log('🔁 Firebase user synced:', data); // ✅ Debug log
 
       localStorage.setItem('firebaseToken', token);
       localStorage.setItem('userId', data.userId);
       localStorage.setItem('username', data.username);
 
-      // ✅ Fire storage event to update auth state
       window.dispatchEvent(new Event('storage'));
       navigate('/');
     } catch (error) {

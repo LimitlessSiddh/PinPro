@@ -5,6 +5,6 @@ const router = Router();
 
 router.post('/register', register);
 router.post('/login', login);
-router.post('/sync-firebase-user', syncFirebaseUser);
+router.post('/sync-firebase-user', syncFirebaseUser); // ✅ Handled above
 
 export default router;

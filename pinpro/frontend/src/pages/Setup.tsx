@@ -6,9 +6,8 @@ const clubs = [
   '7 Iron', '8 Iron', '9 Iron', 'Pitching Wedge', 'Sand Wedge', 'Lob Wedge',
 ];
 
-const userId = localStorage.getItem('userId') || 'guest_user';
-
 const Setup = () => {
+  const userId = localStorage.getItem('userId') || 'guest_user';
   const [yardages, setYardages] = useState<Record<string, number>>({});
   const [status, setStatus] = useState<string | null>(null);
 
@@ -21,7 +20,7 @@ const Setup = () => {
         }
       })
       .catch((err) => console.error('Error fetching clubs:', err));
-  }, []);
+  }, [userId]);
 
   const saveToBackend = (clubsData: Record<string, number>, message = 'Saved ✅') => {
     fetch('http://localhost:5050/api/clubs/save', {
@@ -60,40 +59,47 @@ const Setup = () => {
   return (
     <>
       <Navbar />
-      <div className="max-w-xl mx-auto p-6">
-        <h2 className="text-3xl font-bold text-primary mb-2">Set Your Club Yardages</h2>
-        <p className="text-gray-500 mb-4">All changes are saved automatically.</p>
+      <div className="min-h-screen p-6 bg-[#f9f9f9] flex flex-col items-center">
+        <h1 className="text-4xl font-bold mb-2 text-center text-[#202334]">Setup Your Clubs</h1>
+        <p className="text-lg text-gray-600 mb-6 text-center">Customize your go-to yardages for each club </p>
 
-        {clubs.map((club) => (
-          <div key={club} className="mb-4">
-            <label className="block text-gray-700 font-medium mb-1">{club}</label>
-            <input
-              type="number"
-              value={yardages[club] ?? ''}
-              onChange={(e) => handleChange(club, parseInt(e.target.value) || 0)}
-              className="w-full border border-gray-300 rounded-md p-2"
-              placeholder="Enter yardage"
-            />
-          </div>
-        ))}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 w-full max-w-3xl">
+          {clubs.map((club) => (
+            <div
+              key={club}
+              className="flex items-center justify-between bg-white p-4 rounded-xl shadow-md border hover:scale-[1.02] transition-all duration-200"
+            >
+              <label className="text-gray-800 font-medium text-lg">{club}</label>
+              <input
+                type="number"
+                value={yardages[club] || ''}
+                onChange={(e) => handleChange(club, Number(e.target.value))}
+                placeholder="Yards"
+                className="border border-gray-300 p-2 rounded-md w-24 text-center focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+              />
+            </div>
+          ))}
+        </div>
 
-        <div className="flex justify-between mt-6 gap-4">
-          <button
-            onClick={handleReset}
-            className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-          >
-            Reset Clubs
-          </button>
+        <div className="flex gap-6 mt-8">
           <button
             onClick={handleManualSave}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            className="bg-blue-600 text-white px-6 py-3 rounded-full text-lg font-semibold hover:bg-blue-700 transition shadow"
           >
-            Save Manually
+             Save
+          </button>
+          <button
+            onClick={handleReset}
+            className="bg-red-600 text-white px-6 py-3 rounded-full text-lg font-semibold hover:bg-red-700 transition shadow"
+          >
+             Reset
           </button>
         </div>
 
         {status && (
-          <p className="text-sm text-green-600 italic mt-4">{status}</p>
+          <div className="mt-6 px-4 py-2 rounded-full text-white bg-green-600 text-lg animate-fade-in-down shadow">
+            {status}
+          </div>
         )}
       </div>
     </>

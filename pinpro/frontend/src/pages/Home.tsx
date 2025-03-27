@@ -22,15 +22,15 @@ const Home = () => {
         {/* Feature section */}
         <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-6xl">
           <div className="p-6 bg-gray-50 border rounded-lg shadow hover:shadow-md transition">
-            <h3 className="text-lg font-semibold text-primary mb-2">📏 Custom Yardages</h3>
+            <h3 className="text-lg font-semibold text-primary mb-2">Custom Yardages</h3>
             <p className="text-gray-600 text-sm">Save personalized yardages for every club so suggestions match your game.</p>
           </div>
           <div className="p-6 bg-gray-50 border rounded-lg shadow hover:shadow-md transition">
-            <h3 className="text-lg font-semibold text-primary mb-2">📈 Round Tracker</h3>
+            <h3 className="text-lg font-semibold text-primary mb-2">Round Tracker</h3>
             <p className="text-gray-600 text-sm">Track your performance per hole and see stats update in your profile.</p>
           </div>
           <div className="p-6 bg-gray-50 border rounded-lg shadow hover:shadow-md transition">
-            <h3 className="text-lg font-semibold text-primary mb-2">🤖 Smart Suggestions</h3>
+            <h3 className="text-lg font-semibold text-primary mb-2">Smart Suggestions</h3>
             <p className="text-gray-600 text-sm">Let AI recommend the right club based on distance and your saved data.</p>
           </div>
         </div>
