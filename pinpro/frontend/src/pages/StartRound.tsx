@@ -19,7 +19,7 @@ const StartRound = () => {
   const userId = localStorage.getItem('userId') || 'guest_user';
 
   useEffect(() => {
-    fetch(`http://localhost:5050/api/clubs/${userId}`)
+    fetch(`https://pinpro.onrender.com/api/clubs/${userId}`)
       .then((res) => res.json())
       .then((data) => setYardages(data))
       .catch((err) => console.error('Error fetching clubs:', err));
@@ -32,7 +32,7 @@ const StartRound = () => {
     }
 
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${
+    script.src = `https://pinpro.onrender.com/maps/api/js?key=${
       import.meta.env.VITE_GOOGLE_MAPS_API_KEY
     }&libraries=places`;
     script.async = true;
@@ -91,7 +91,7 @@ const StartRound = () => {
     const par = totalHoles === 9 ? 36 : 72;
     const finalScore = score - par;
 
-    fetch('http://localhost:5050/api/rounds/save', {
+    fetch('https://pinpro.onrender.com/api/rounds/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

@@ -40,7 +40,7 @@ const Profile = () => {
   useEffect(() => {
     if (!userId) return;
 
-    fetch(`http://localhost:5050/api/rounds/${userId}`)
+    fetch(`https://pinpro.onrender.com/api/rounds/${userId}`)
       .then((res) => res.json())
       .then((data) => {
         setRounds(data.rounds || []);

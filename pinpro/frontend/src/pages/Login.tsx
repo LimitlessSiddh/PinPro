@@ -12,7 +12,7 @@ const Login = () => {
 
   const handleLogin = async () => {
     try {
-      const res = await fetch('http://localhost:5050/api/auth/login', {
+      const res = await fetch('https://pinpro.onrender.com/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
