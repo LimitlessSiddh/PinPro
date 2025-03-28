@@ -1,3 +1,4 @@
+// src/firebaseAdmin.ts
 import admin from 'firebase-admin';
 import * as dotenv from 'dotenv';
 

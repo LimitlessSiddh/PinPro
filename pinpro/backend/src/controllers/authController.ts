@@ -1,3 +1,5 @@
+// src/controllers/authController.ts
+
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -78,10 +80,11 @@ const syncFirebaseUser = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const { uid, email } = req.body;
+  const uid = decoded.uid;
+  const email = decoded.email;
 
   if (!uid || !email) {
-    res.status(400).json({ error: 'Missing Firebase user data' });
+    res.status(400).json({ error: 'Missing Firebase user data in token' });
     return;
   }
 
