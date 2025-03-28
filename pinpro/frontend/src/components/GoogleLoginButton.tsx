@@ -15,7 +15,7 @@ const GoogleLoginButton = () => {
       const uid = user.uid;
       const email = user.email;
 
-      const res = await fetch('http://localhost:5050/api/auth/sync-firebase-user', {
+      const res = await fetch('https://pinpro.onrender.com/api/auth/sync-firebase-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
