@@ -32,8 +32,6 @@ const Profile = () => {
     const storedId = localStorage.getItem('userId');
     if (storedId && storedId !== 'undefined') {
       setUserId(storedId);
-    } else {
-      setUserId(null);
     }
   }, []);
 
@@ -147,31 +145,32 @@ const Profile = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {rounds.map((round) => (
-                    <tr key={round.id} className="hover:bg-gray-50">
-                      <td className="p-3 border">
-                        {new Date(round.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="p-3 border font-semibold italic text-blue-600">
-                        {round.course_name || '—'}
-                      </td>
-                      <td className="p-3 border">{round.total_holes}</td>
-                      <td className="p-3 border">{round.shots}</td>
-                      <td
-                        className={`p-3 border font-medium ${
-                          round.final_score >= 0 ? 'text-red-600' : 'text-green-600'
-                        }`}
-                      >
-                        {formatScore(round.final_score)}
-                      </td>
-                    </tr>
-                  ))}
-                  {rounds.length === 0 && (
+                  {rounds.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="text-center p-4 text-gray-500 italic">
                         No rounds yet
                       </td>
                     </tr>
+                  ) : (
+                    rounds.map((round) => (
+                      <tr key={round.id} className="hover:bg-gray-50">
+                        <td className="p-3 border">
+                          {new Date(round.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="p-3 border font-semibold italic text-blue-600">
+                          {round.course_name || '—'}
+                        </td>
+                        <td className="p-3 border">{round.total_holes}</td>
+                        <td className="p-3 border">{round.shots}</td>
+                        <td
+                          className={`p-3 border font-medium ${
+                            round.final_score >= 0 ? 'text-red-600' : 'text-green-600'
+                          }`}
+                        >
+                          {formatScore(round.final_score)}
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
