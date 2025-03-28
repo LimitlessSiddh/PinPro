@@ -10,7 +10,10 @@ dotenv.config();
 const app = express();
 
 app.use(cors({
-  origin: 'http://localhost:5173', // Allow frontend
+  origin: [
+    'http://localhost:5173',
+    'https://pin-iahqberue-siddh-patels-projects.vercel.app',
+  ],
   credentials: true,
 }));
 
