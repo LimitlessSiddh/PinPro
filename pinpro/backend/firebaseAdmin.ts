@@ -1,10 +1,11 @@
-// src/firebaseAdmin.ts
 import admin from 'firebase-admin';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string);
+const serviceAccount = JSON.parse(
+  process.env.FIREBASE_SERVICE_ACCOUNT_KEY?.replace(/\\n/g, '\n') || '{}'
+);
 
 if (!admin.apps.length) {
   admin.initializeApp({

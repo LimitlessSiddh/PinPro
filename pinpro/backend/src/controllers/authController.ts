@@ -1,14 +1,12 @@
-// src/controllers/authController.ts
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { pool } from '../db';
 import { verifyFirebaseToken } from '../../firebaseAdmin';
 
-
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
 
-export const register = async (req: Request, res: Response): Promise<void> => {
+const register = async (req: Request, res: Response): Promise<void> => {
   const { username, password } = req.body;
 
   if (!username || !password) {
@@ -18,7 +16,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
   try {
     const hashed = await bcrypt.hash(password, 10);
-
     const result = await pool.query(
       'INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id, username',
       [username, hashed]
@@ -38,7 +35,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const login = async (req: Request, res: Response): Promise<void> => {
+const login = async (req: Request, res: Response): Promise<void> => {
   const { username, password } = req.body;
 
   try {
@@ -66,9 +63,9 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const syncFirebaseUser = async (req: Request, res: Response): Promise<void> => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.split(' ')[1];
+const syncFirebaseUser = async (req: Request, res: Response): Promise<void> => {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.split(' ')[1];
 
   if (!token) {
     res.status(401).json({ error: 'Missing Firebase token' });
@@ -76,13 +73,17 @@ export const syncFirebaseUser = async (req: Request, res: Response): Promise<voi
   }
 
   const decoded = await verifyFirebaseToken(token);
-  if (!decoded || !decoded.uid || !decoded.email) {
-    res.status(401).json({ error: 'Invalid Firebase token' });
+  if (!decoded) {
+    res.status(403).json({ error: 'Invalid Firebase token' });
     return;
   }
 
-  const uid = decoded.uid;
-  const email = decoded.email;
+  const { uid, email } = req.body;
+
+  if (!uid || !email) {
+    res.status(400).json({ error: 'Missing Firebase user data' });
+    return;
+  }
 
   try {
     const existing = await pool.query(
@@ -121,7 +122,6 @@ export const syncFirebaseUser = async (req: Request, res: Response): Promise<voi
         'UPDATE users SET firebase_uid = $1 WHERE id = $2',
         [uid, user.id]
       );
-
       res.status(200).json({ userId: user.id, username: user.username });
       return;
     }
@@ -132,3 +132,5 @@ export const syncFirebaseUser = async (req: Request, res: Response): Promise<voi
     res.status(500).json({ error: 'Failed to sync Firebase user' });
   }
 };
+
+export { register, login, syncFirebaseUser };
