@@ -72,13 +72,15 @@ export const saveRound = async (req: Request, res: Response): Promise<void> => {
 
     res.status(200).json({ message: 'Round saved and handicap updated' });
   } catch (error) {
-    console.error('Error saving round:', error);
+    console.error('❌ Error saving round:', error);
     res.status(500).json({ error: 'Failed to save round' });
   }
 };
 
 export const getRounds = async (req: Request, res: Response): Promise<void> => {
   const { userId } = req.params;
+
+  console.log('✅ GET /api/rounds/:userId hit with userId:', userId);
 
   if (!userId) {
     res.status(400).json({ error: 'userId is required' });
@@ -99,14 +101,14 @@ export const getRounds = async (req: Request, res: Response): Promise<void> => {
       [userId]
     );
 
-    const handicap = userResult.rows[0]?.handicap ?? 0;
+    const handicap = userResult.rows.length > 0 ? userResult.rows[0].handicap : 0;
 
     res.status(200).json({
       rounds: roundsResult.rows,
       handicap,
     });
   } catch (error) {
-    console.error('Error fetching rounds:', error);
+    console.error('❌ Error fetching rounds:', error);
     res.status(500).json({ error: 'Failed to fetch round history' });
   }
 };
