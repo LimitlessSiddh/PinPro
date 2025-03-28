@@ -12,7 +12,7 @@ const app = express();
 app.use(cors({
   origin: [
     'http://localhost:5173',
-    'https://pin-79i034rby-siddh-patels-projects.vercel.app',
+    'https://pin-pro.vercel.app',
   ],
   credentials: true,
 }));
