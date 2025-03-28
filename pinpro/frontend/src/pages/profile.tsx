@@ -28,13 +28,24 @@ const Profile = () => {
   const [handicap, setHandicap] = useState<number>(0);
   const [showChart, setShowChart] = useState(false);
 
+  // 🔄 Listen for userId updates (e.g. after Google login)
   useEffect(() => {
-    const storedId = localStorage.getItem('userId');
-    if (storedId && storedId !== 'undefined') {
-      setUserId(storedId);
-    }
+    const updateUserId = () => {
+      const storedId = localStorage.getItem('userId');
+      if (storedId && storedId !== 'undefined') {
+        setUserId(storedId);
+      } else {
+        setUserId(null);
+      }
+    };
+
+    updateUserId(); // on first load
+    window.addEventListener('storage', updateUserId); // on localStorage updates
+
+    return () => window.removeEventListener('storage', updateUserId);
   }, []);
 
+  // 🏌 Fetch round data once userId is available
   useEffect(() => {
     if (!userId) return;
 
