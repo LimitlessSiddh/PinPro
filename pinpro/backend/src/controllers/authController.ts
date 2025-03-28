@@ -4,7 +4,8 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { pool } from '../db';
-import { verifyFirebaseToken } from '../../firebaseAdmin';
+import { verifyFirebaseToken } from '../firebaseAdmin';
+
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
 
