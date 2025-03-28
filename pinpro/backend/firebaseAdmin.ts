@@ -1,4 +1,4 @@
-
+// src/firebaseAdmin.ts
 import admin from 'firebase-admin';
 import * as dotenv from 'dotenv';
 
@@ -17,7 +17,7 @@ export const verifyFirebaseToken = async (token: string) => {
     const decodedToken = await admin.auth().verifyIdToken(token);
     return decodedToken;
   } catch (error) {
-    console.error('Firebase token verification failed:', error);
+    console.error('❌ Firebase token verification failed:', error);
     return null;
   }
 };

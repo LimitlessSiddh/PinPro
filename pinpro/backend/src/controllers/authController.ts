@@ -1,7 +1,10 @@
+// src/controllers/authController.ts
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { pool } from '../db';
+import { verifyFirebaseToken } from '../../firebaseAdmin';
+
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
 
@@ -64,15 +67,24 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 };
 
 export const syncFirebaseUser = async (req: Request, res: Response): Promise<void> => {
-  const { uid, email } = req.body;
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.split(' ')[1];
 
-  if (!uid || !email) {
-    res.status(400).json({ error: 'Missing Firebase user data' });
+  if (!token) {
+    res.status(401).json({ error: 'Missing Firebase token' });
     return;
   }
 
+  const decoded = await verifyFirebaseToken(token);
+  if (!decoded || !decoded.uid || !decoded.email) {
+    res.status(401).json({ error: 'Invalid Firebase token' });
+    return;
+  }
+
+  const uid = decoded.uid;
+  const email = decoded.email;
+
   try {
-    // Step 1: Check if user already exists via UID
     const existing = await pool.query(
       'SELECT id, username FROM users WHERE firebase_uid = $1',
       [uid]
@@ -84,7 +96,6 @@ export const syncFirebaseUser = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    // Step 2: Try to insert new Firebase user
     const insertResult = await pool.query(
       `INSERT INTO users (username, firebase_uid)
        VALUES ($1, $2)
@@ -99,7 +110,6 @@ export const syncFirebaseUser = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    // Step 3: Fallback if conflict (user exists with same email as username)
     const fallback = await pool.query(
       'SELECT id, username FROM users WHERE username = $1',
       [email]
@@ -107,8 +117,6 @@ export const syncFirebaseUser = async (req: Request, res: Response): Promise<voi
 
     if (fallback.rows.length > 0) {
       const user = fallback.rows[0];
-
-      // OPTIONAL: Update firebase_uid for existing email user (only once)
       await pool.query(
         'UPDATE users SET firebase_uid = $1 WHERE id = $2',
         [uid, user.id]
