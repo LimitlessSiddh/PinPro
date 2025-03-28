@@ -3,22 +3,22 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const serviceAccount = JSON.parse(
-  process.env.FIREBASE_SERVICE_ACCOUNT_KEY?.replace(/\\n/g, '\n') || '{}'
-);
-
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    }),
   });
 }
 
 export const verifyFirebaseToken = async (token: string) => {
   try {
-    const decodedToken = await admin.auth().verifyIdToken(token);
-    return decodedToken;
-  } catch (error) {
-    console.error('❌ Firebase token verification failed:', error);
+    const decoded = await admin.auth().verifyIdToken(token);
+    return decoded;
+  } catch (err) {
+    console.error('❌ Firebase token verification failed:', err);
     return null;
   }
 };
