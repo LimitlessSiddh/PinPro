@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "ts-node src/index.ts",           
-    "build": "tsc",                          
-    "start": "node dist/index.js"            
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
   },
   "keywords": [],
   "author": "",
@@ -32,4 +32,3 @@
     "typescript": "^5.8.2"
   }
 }
-
