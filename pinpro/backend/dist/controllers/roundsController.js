@@ -46,13 +46,14 @@ const saveRound = async (req, res) => {
         res.status(200).json({ message: 'Round saved and handicap updated' });
     }
     catch (error) {
-        console.error('Error saving round:', error);
+        console.error('❌ Error saving round:', error);
         res.status(500).json({ error: 'Failed to save round' });
     }
 };
 exports.saveRound = saveRound;
 const getRounds = async (req, res) => {
     const { userId } = req.params;
+    console.log('✅ GET /api/rounds/:userId hit with userId:', userId);
     if (!userId) {
         res.status(400).json({ error: 'userId is required' });
         return;
@@ -63,14 +64,14 @@ const getRounds = async (req, res) => {
        WHERE user_id = $1
        ORDER BY created_at DESC`, [userId]);
         const userResult = await db_1.pool.query('SELECT handicap FROM users WHERE id = $1', [userId]);
-        const handicap = userResult.rows[0]?.handicap ?? 0;
+        const handicap = userResult.rows.length > 0 ? userResult.rows[0].handicap : 0;
         res.status(200).json({
             rounds: roundsResult.rows,
             handicap,
         });
     }
     catch (error) {
-        console.error('Error fetching rounds:', error);
+        console.error('❌ Error fetching rounds:', error);
         res.status(500).json({ error: 'Failed to fetch round history' });
     }
 };
