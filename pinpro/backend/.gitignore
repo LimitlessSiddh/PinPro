@@ -1,0 +1,5 @@
+node_modules/
+.env
+*.log
+# dist/ is intentionally still tracked: Render may serve the committed build.
+# Confirm Render's build command runs `npm run build` before ignoring it.
