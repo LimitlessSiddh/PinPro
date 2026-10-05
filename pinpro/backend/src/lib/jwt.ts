@@ -5,7 +5,8 @@ const SESSION_TTL = '7d'; // long enough that a session can't expire mid-round
 function secret(): string {
   const value = process.env.JWT_SECRET;
   if (value) return value;
-  if (process.env.NODE_ENV === 'production') {
+  // Render sets RENDER but not NODE_ENV; never fall back to the public dev secret there.
+  if (process.env.NODE_ENV === 'production' || process.env.RENDER) {
     throw new Error('JWT_SECRET must be set in production');
   }
   return 'dev_secret_not_for_production';
