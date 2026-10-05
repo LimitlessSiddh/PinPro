@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import Profile from './pages/profile';
+import Profile from './pages/Profile';
 import StartRound from './pages/StartRound';
 import Setup from './pages/Setup';
 import ProtectedRoute from './components/ProtectedRoutes';
