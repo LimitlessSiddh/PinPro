@@ -1,72 +1,90 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import Navbar from '../components/Navbar';
+import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import AuthLayout from '../components/AuthLayout';
+import GoogleLoginButton from '../components/GoogleLoginButton';
+import { googleSignInEnabled } from '../lib/google';
+import { Alert, Button, Input } from '../components/ui';
+import { apiFetch, errorMessage } from '../lib/api';
+import { setSession, type Session } from '../lib/session';
+import { usePageTitle } from '../lib/usePageTitle';
+
+// Same rules as the server (authController.register).
+const validate = (username: string, password: string) => ({
+  username: /^[A-Za-z0-9_.-]{3,30}$/.test(username.trim())
+    ? null
+    : '3–30 characters: letters, numbers, dots, dashes or underscores.',
+  password: password.length >= 8 ? null : 'Use at least 8 characters.',
+});
 
 const Register = () => {
+  usePageTitle('Create account');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const navigate = useNavigate();
+  const [touched, setTouched] = useState({ username: false, password: false });
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const errors = validate(username, password);
 
-  const handleRegister = async () => {
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setTouched({ username: true, password: true });
+    if (errors.username || errors.password) return;
+    setError(null);
+    setLoading(true);
     try {
-      const res = await fetch('https://pinpro.onrender.com/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || 'Registration failed');
-        return;
-      }
-
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('userId', data.userId);
-      localStorage.setItem('username', data.username);
-
-      navigate('/profile');
+      // The router sends new accounts straight to club setup.
+      setSession(await apiFetch<Session>('/api/auth/register', { method: 'POST', body: { username, password } }));
     } catch (err) {
-      setError('Something went wrong.');
+      setError(errorMessage(err));
+      setLoading(false);
     }
   };
 
   return (
-    <>
-      <Navbar />
-      <div className="min-h-screen flex flex-col items-center justify-center px-6">
-        <h1 className="text-3xl font-bold text-primary mb-4">Register</h1>
-        <input
-          type="text"
-          placeholder="Choose a username"
+    <AuthLayout title="Create your account" subtitle="It takes a minute. Next, you'll add your club distances.">
+      <form onSubmit={handleSubmit} noValidate className="space-y-5">
+        <Input
+          label="Username"
+          autoComplete="username"
+          autoCapitalize="none"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          className="w-full max-w-sm border p-2 rounded mb-4"
+          onBlur={() => setTouched((t) => ({ ...t, username: true }))}
+          hint="Letters, numbers, dots, dashes or underscores."
+          error={touched.username ? errors.username : null}
         />
-        <input
+        <Input
+          label="Password"
           type="password"
-          placeholder="Choose a password"
+          autoComplete="new-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full max-w-sm border p-2 rounded mb-4"
+          onBlur={() => setTouched((t) => ({ ...t, password: true }))}
+          hint="At least 8 characters."
+          error={touched.password ? errors.password : null}
         />
-        <button
-          onClick={handleRegister}
-          className="bg-black text-white px-6 py-2 rounded hover:bg-accent"
-        >
-          Register
-        </button>
-        {error && <p className="text-red-600 mt-4">{error}</p>}
-        <p className="text-sm text-gray-600 mt-4">
-          Already have an account?{' '}
-          <Link to="/login" className="text-primary underline hover:text-accent">
-            Login here
-          </Link>
-        </p>
-      </div>
-    </>
+        {error && <Alert tone="error">{error}</Alert>}
+        <Button type="submit" loading={loading} className="w-full">
+          Create account
+        </Button>
+      </form>
+
+      {googleSignInEnabled && (
+        <>
+          <div className="my-6 flex items-center gap-3 text-sm text-slate-500">
+            <span className="h-px flex-1 bg-slate-200" /> or <span className="h-px flex-1 bg-slate-200" />
+          </div>
+          <GoogleLoginButton />
+        </>
+      )}
+
+      <p className="mt-8 text-center text-slate-600">
+        Already have an account?{' '}
+        <Link to="/login" className="font-semibold text-fairway underline-offset-4 hover:underline">
+          Log in
+        </Link>
+      </p>
+    </AuthLayout>
   );
 };
 

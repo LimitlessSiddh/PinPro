@@ -1,27 +1,23 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyFirebaseToken } from '../firebaseAdmin';
+import { verifySession } from '../lib/jwt';
 
-// 👇 Extend the Express Request type to allow 'user'
 declare module 'express-serve-static-core' {
   interface Request {
-    user?: any; // Optional: Replace `any` with a custom decoded token type if you want
+    userId?: number;
   }
 }
 
-export const verifyAuth = async (req: Request, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization;
+// Every clubs/rounds request is scoped to the user in the signed token, never a client-sent id.
+export const verifyAuth = (req: Request, res: Response, next: NextFunction): void => {
+  const header = req.headers.authorization;
+  const token = header?.startsWith('Bearer ') ? header.slice(7) : null;
+  const userId = token ? verifySession(token) : null;
 
-  if (!authHeader?.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'No token provided' });
+  if (!userId) {
+    res.status(401).json({ error: 'Your session has expired. Please log in again.' });
+    return;
   }
 
-  const token = authHeader.split(' ')[1];
-  const decoded = await verifyFirebaseToken(token);
-
-  if (!decoded) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
-
-  req.user = decoded; 
+  req.userId = userId;
   next();
 };

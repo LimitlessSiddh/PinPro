@@ -20,10 +20,10 @@ I built PinPro as an end-to-end product to explore how a real sports workflow ca
 ## Core Features
 
 - **Personalized golf bag:** Save a custom yardage for each club so recommendations reflect the player's actual game.
-- **Smart club suggestions:** Match a target distance with the most appropriate club from the player's saved data.
-- **Round tracking:** Record course details, holes, shots, distances, scores, and recommended clubs throughout a round.
-- **Performance dashboard:** Review previous rounds, average and best scores, handicap information, and score trends.
-- **Secure accounts:** Register with email and password or sign in with Google through Firebase Authentication.
+- **Club suggestions:** Enter the distance to the pin and get the shortest club in your bag that carries it, with the reasoning shown.
+- **Round tracking:** Record 9- or 18-hole rounds shot by shot with a live scorecard; an unfinished round survives a refresh or a locked phone.
+- **Performance dashboard:** Review round history, best and average scores (9 and 18 holes kept separate), a score trend, and a handicap estimate modelled on the World Handicap System.
+- **Secure accounts:** Register with a username and password or sign in with Google. Every request is scoped to the signed-in player by a server-issued token.
 - **Persistent player data:** Store profiles, clubs, and round history in PostgreSQL through a dedicated REST API.
 
 ## Architecture
@@ -37,16 +37,16 @@ flowchart LR
     A --> E[Google Maps API]
 ```
 
-The frontend handles the player experience, protected navigation, round entry, and Chart.js visualizations. The Express backend owns account synchronization, club persistence, round history, and handicap updates. PostgreSQL stores the relational player data, while Firebase provides email/password and Google identity flows.
+The frontend handles the player experience, protected navigation, round entry, and Chart.js visualizations. The Express backend owns authentication (bcrypt + JWT), Google account verification via Firebase Admin, validation, club and round persistence, and the handicap calculation. PostgreSQL stores the relational player data; Firebase is used only for the Google sign-in popup.
 
 ## Technical Decisions
 
 - Used **TypeScript across the frontend and backend** to keep data contracts explicit and reduce runtime errors.
 - Separated the **React client, REST API, and PostgreSQL data layer** so each part of the system can evolve independently.
 - Built club recommendations from **player-specific yardage data** instead of relying on generic distance assumptions.
-- Protected application routes and synchronized Firebase identities with the backend user model.
-- Calculated updated handicap information from recent round performance and surfaced trends with Chart.js.
-- Designed responsive flows for club setup, active round tracking, round summaries, and player history.
+- Unified password and Google sign-in into one server-issued session, so every clubs/rounds request is authorized by token rather than a client-supplied user id.
+- Implemented a handicap estimate following the WHS “best N of last 20” table, covered by unit tests with hand-calculated cases, and surfaced trends with Chart.js.
+- Designed mobile-first flows (bottom tab bar, 44px+ targets, accessible forms) and covered the core journeys with Playwright end-to-end tests.
 
 ## Tech Stack
 
@@ -77,9 +77,10 @@ npm install
 npm run dev
 ```
 
-The frontend expects the following environment variables:
+The frontend expects the following environment variables (all optional except `VITE_API_URL` for local work; it defaults to the production API):
 
 ```env
+VITE_API_URL=http://localhost:5050
 VITE_FIREBASE_API_KEY=
 VITE_FIREBASE_AUTH_DOMAIN=
 VITE_FIREBASE_PROJECT_ID=
@@ -106,6 +107,22 @@ FIREBASE_PROJECT_ID=
 FIREBASE_PRIVATE_KEY=
 FIREBASE_CLIENT_EMAIL=
 ```
+
+## Testing
+
+```bash
+cd pinpro/backend  && npm run test:db && npm test     # API + handicap tests (local pinpro_test DB)
+cd pinpro/frontend && npm test                         # unit tests (Vitest)
+cd pinpro/frontend && npm run test:e2e                 # Playwright journeys against a local API + DB
+```
+
+Details are in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md); design rules are in [`docs/DESIGN.md`](docs/DESIGN.md).
+
+## Screenshots
+
+| Home | Playing a round (mobile) | Profile |
+| --- | --- | --- |
+| ![Home](docs/screenshots/after/home-1440.png) | ![Round](docs/screenshots/after/play-375.png) | ![Profile](docs/screenshots/after/profile-1440.png) |
 
 ## What I Learned
 

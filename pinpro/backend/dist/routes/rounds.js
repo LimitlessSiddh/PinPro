@@ -2,11 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const roundsController_1 = require("../controllers/roundsController");
+const authMiddleware_1 = require("../middleware/authMiddleware");
 const router = (0, express_1.Router)();
-router.post('/save', (req, res) => {
-    void (0, roundsController_1.saveRound)(req, res);
-});
-router.get('/:userId', (req, res) => {
-    void (0, roundsController_1.getRounds)(req, res);
-});
+router.use(authMiddleware_1.verifyAuth);
+router.get('/', roundsController_1.getRounds);
+router.post('/', roundsController_1.saveRound);
 exports.default = router;

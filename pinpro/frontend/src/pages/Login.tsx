@@ -1,83 +1,79 @@
-// src/pages/Login.tsx
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import Navbar from '../components/Navbar';
+import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import AuthLayout from '../components/AuthLayout';
 import GoogleLoginButton from '../components/GoogleLoginButton';
+import { googleSignInEnabled } from '../lib/google';
+import { Alert, Button, Input } from '../components/ui';
+import { apiFetch, errorMessage } from '../lib/api';
+import { lastLogoutReason, setSession, type Session } from '../lib/session';
+import { usePageTitle } from '../lib/usePageTitle';
 
 const Login = () => {
+  usePageTitle('Log in');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const expired = lastLogoutReason() === 'expired';
 
-  const handleLogin = async () => {
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!username.trim() || !password) {
+      setError('Enter your username and password.');
+      return;
+    }
+    setError(null);
+    setLoading(true);
     try {
-      const res = await fetch('https://pinpro.onrender.com/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || 'Login failed');
-        return;
-      }
-
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('userId', data.userId);
-      localStorage.setItem('username', data.username);
-
-      window.dispatchEvent(new Event('storage')); // 🔄 Update global auth state
-      navigate('/');
+      setSession(await apiFetch<Session>('/api/auth/login', { method: 'POST', body: { username, password } }));
     } catch (err) {
-      setError('Something went wrong.');
+      setError(errorMessage(err));
+      setLoading(false);
     }
   };
 
   return (
-    <>
-      <Navbar />
-      <div className="min-h-screen flex flex-col items-center justify-center px-6">
-        <h1 className="text-3xl font-bold text-primary mb-4">Login</h1>
-
-        <input
-          type="text"
-          placeholder="Username"
+    <AuthLayout title="Welcome back" subtitle="Log in to see your clubs, rounds and handicap.">
+      {expired && !error && (
+        <Alert className="mb-6">Your session ended. Please log in again — an unfinished round is still saved on this device.</Alert>
+      )}
+      <form onSubmit={handleSubmit} noValidate className="space-y-5">
+        <Input
+          label="Username"
+          autoComplete="username"
+          autoCapitalize="none"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          className="w-full max-w-sm border p-2 rounded mb-4"
         />
-        <input
+        <Input
+          label="Password"
           type="password"
-          placeholder="Password"
+          autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full max-w-sm border p-2 rounded mb-4"
         />
+        {error && <Alert tone="error">{error}</Alert>}
+        <Button type="submit" loading={loading} className="w-full">
+          Log in
+        </Button>
+      </form>
 
-        <button
-          onClick={handleLogin}
-          className="bg-black text-white px-6 py-2 rounded hover:bg-accent mb-4"
-        >
-          Login
-        </button>
+      {googleSignInEnabled && (
+        <>
+          <div className="my-6 flex items-center gap-3 text-sm text-slate-500">
+            <span className="h-px flex-1 bg-slate-200" /> or <span className="h-px flex-1 bg-slate-200" />
+          </div>
+          <GoogleLoginButton />
+        </>
+      )}
 
-        <div className="mb-4">or</div>
-
-        <GoogleLoginButton />
-
-        {error && <p className="text-red-600 mt-4">{error}</p>}
-
-        <p className="text-sm text-gray-600 mt-4">
-          Don’t have an account?{' '}
-          <Link to="/register" className="text-primary underline hover:text-accent">
-            Register here
-          </Link>
-        </p>
-      </div>
-    </>
+      <p className="mt-8 text-center text-slate-600">
+        New to PinPro?{' '}
+        <Link to="/register" className="font-semibold text-fairway underline-offset-4 hover:underline">
+          Create an account
+        </Link>
+      </p>
+    </AuthLayout>
   );
 };
 

@@ -1,2 +1,41 @@
 @import "tailwindcss";
 
+/* PinPro palette: the existing navy plus one golf green. Red is reserved for errors. */
+@theme {
+  --color-navy: #202334;
+  --color-navy-light: #2e3248;
+  --color-fairway: #166534;        /* green-800: primary actions, 7:1 on white */
+  --color-fairway-dark: #14532d;   /* green-900: hover */
+  --color-fairway-soft: #ecfdf3;   /* tinted surfaces */
+  --color-page: #f6f8f7;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-page text-slate-800 antialiased;
+    font-feature-settings: "tnum" 1; /* aligned yardages and scores */
+  }
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 3px solid var(--color-fairway);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  button:not(:disabled), [role="button"], summary {
+    cursor: pointer;
+  }
+  input, select, button {
+    touch-action: manipulation;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

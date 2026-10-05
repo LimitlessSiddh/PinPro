@@ -1,17 +1,11 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
 import { saveRound, getRounds } from '../controllers/roundsController';
+import { verifyAuth } from '../middleware/authMiddleware';
 
 const router = Router();
 
-router.post('/save', (req: Request, res: Response) => {
-  void saveRound(req, res);
-});
-
-router.get('/:userId', (req: Request, res: Response) => {
-  void getRounds(req, res);
-});
-
-
-
+router.use(verifyAuth);
+router.get('/', getRounds);
+router.post('/', saveRound);
 
 export default router;

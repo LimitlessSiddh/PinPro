@@ -1,281 +1,214 @@
-import { useEffect, useRef, useState } from 'react';
-import Navbar from '../components/Navbar';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import RoundPlay, { type SavedRound } from '../components/RoundPlay';
+import { CheckIcon } from '../components/icons';
+import { Alert, Button, Card, Input, PageHeader } from '../components/ui';
+import { formatToPar, type Yardages } from '../lib/golf';
+import {
+  clearDraft,
+  defaultSetup,
+  loadDraft,
+  saveDraft,
+  validateSetup,
+  type RoundDraft,
+  type RoundSetup,
+  type SetupForm,
+} from '../lib/round';
+import { useSession } from '../lib/session';
+import { useApi } from '../lib/useApi';
+import { usePageTitle } from '../lib/usePageTitle';
+import { cx } from '../lib/cx';
 
-const StartRound = () => {
-  const [yardages, setYardages] = useState<Record<string, number>>({});
-  const [distance, setDistance] = useState<number | null>(null);
-  const [suggestedClub, setSuggestedClub] = useState<string | null>(null);
-  const [shots, setShots] = useState<{ distance: number; club: string }[]>([]);
-  const [hole, setHole] = useState(1);
-  const [totalHoles, setTotalHoles] = useState<number | null>(null);
-  const [roundFinished, setRoundFinished] = useState(false);
-  const [score, setScore] = useState(0);
-  const [selectingHoles, setSelectingHoles] = useState(true);
-  const [courseName, setCourseName] = useState<string>('');
-  const [slopeRating, setSlopeRating] = useState<number>(120);
-  const [courseRating, setCourseRating] = useState<number>(72);
-
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const userId = localStorage.getItem('userId') || 'guest_user';
+// Attaches Google Places autocomplete when the Maps script is available; typing always works without it.
+const useCourseAutocomplete = (onPick: (name: string) => void) => {
+  const ref = useRef<HTMLInputElement>(null);
+  const pick = useRef(onPick);
+  pick.current = onPick;
 
   useEffect(() => {
-    fetch(`https://pinpro.onrender.com/api/clubs/${userId}`)
-      .then((res) => res.json())
-      .then((data) => setYardages(data))
-      .catch((err) => console.error('Error fetching clubs:', err));
-  }, [userId]);
-
-  useEffect(() => {
-    if ((window as any).google) {
-      initAutocomplete();
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = `https://pinpro.onrender.com/maps/api/js?key=${
-      import.meta.env.VITE_GOOGLE_MAPS_API_KEY
-    }&libraries=places`;
-    script.async = true;
-    script.defer = true;
-    script.onload = initAutocomplete;
-    document.body.appendChild(script);
+    const attach = () => {
+      const Autocomplete = window.google?.maps?.places?.Autocomplete;
+      if (!Autocomplete || !ref.current) return;
+      const ac = new Autocomplete(ref.current, { types: ['establishment'] });
+      ac.addListener('place_changed', () => {
+        const name = ac.getPlace().name;
+        if (name) pick.current(name);
+      });
+    };
+    if (window.google?.maps?.places) return attach();
+    const script = document.getElementById('google-maps-script');
+    script?.addEventListener('load', attach, { once: true });
+    return () => script?.removeEventListener('load', attach);
   }, []);
+  return ref;
+};
 
-  const initAutocomplete = () => {
-    if (!inputRef.current || !(window as any).google) return;
+const SetupRound = ({ onStart }: { onStart: (setup: RoundSetup) => void }) => {
+  const [form, setForm] = useState<SetupForm>({ courseName: '', ...defaultSetup(18) });
+  const [errors, setErrors] = useState<ReturnType<typeof validateSetup>['errors']>({});
+  const courseRef = useCourseAutocomplete((courseName) => setForm((f) => ({ ...f, courseName })));
 
-    const autocomplete = new (window as any).google.maps.places.Autocomplete(inputRef.current, {
-      types: ['establishment'],
-    });
+  const set = (field: keyof SetupForm) => (e: { target: { value: string } }) =>
+    setForm((f) => ({ ...f, [field]: e.target.value }));
 
-    autocomplete.addListener('place_changed', () => {
-      const place = autocomplete.getPlace();
-      if (place.name) {
-        setCourseName(place.name);
-      }
-    });
+  const chooseHoles = (holes: 9 | 18) =>
+    setForm((f) => ({ ...f, ...defaultSetup(holes), slopeRating: f.slopeRating }));
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    const result = validateSetup(form);
+    setErrors(result.errors);
+    if (result.setup) onStart(result.setup);
+    else document.querySelector<HTMLInputElement>('[aria-invalid="true"]')?.focus();
   };
-
-  const handleSuggest = () => {
-    if (distance === null) return;
-
-    if (distance <= 30) {
-      setSuggestedClub('Putter');
-      return;
-    }
-
-    const sorted = Object.entries(yardages)
-      .filter(([, yards]) => typeof yards === 'number')
-      .sort((a, b) => a[1] - b[1]);
-
-    const club = sorted.find(([, yards]) => yards >= distance);
-    const selectedClub = club
-      ? club[0]
-      : sorted.length > 0
-        ? sorted[sorted.length - 1][0]
-        : 'No clubs set';
-
-    setSuggestedClub(selectedClub);
-  };
-
-  const handleTakeShot = () => {
-    if (distance === null || !suggestedClub) return;
-    setShots([...shots, { distance, club: suggestedClub }]);
-    setDistance(null);
-    setSuggestedClub(null);
-    setScore(score + 1);
-  };
-
-  const handleFinishRound = () => {
-    setRoundFinished(true);
-    const par = totalHoles === 9 ? 36 : 72;
-    const finalScore = score - par;
-
-    fetch('https://pinpro.onrender.com/api/rounds/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId,
-        totalHoles,
-        shots: score,
-        finalScore,
-        par,
-        shotData: shots,
-        courseName,
-        slopeRating,
-        courseRating,
-      }),
-    })
-      .then((res) => res.json())
-      .then((data) => console.log('✅ Round saved:', data))
-      .catch((err) => console.error('❌ Failed to save round:', err));
-  };
-
-  const handleNextHole = () => {
-    if (hole === totalHoles) {
-      handleFinishRound();
-    } else {
-      setHole(hole + 1);
-    }
-  };
-
-  const handleEndRound = () => {
-    handleFinishRound();
-  };
-
-  if (selectingHoles) {
-    return (
-      <>
-        <Navbar />
-        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#f9f9f9]">
-          <h1 className="text-4xl font-bold text-[#202334] mb-6 text-center">Start Your Round</h1>
-
-          <div className="bg-white shadow-md rounded-xl p-6 w-full max-w-md mb-8 border border-gray-200">
-            <h2 className="text-xl font-semibold text-[#202334] mb-4 text-center">📍 Course Details</h2>
-
-            <label className="block text-left text-sm text-gray-600 mb-1">Course Name</label>
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder="e.g. Pebble Beach"
-              value={courseName}
-              onChange={(e) => setCourseName(e.target.value)}
-              className="border border-gray-300 p-2 rounded mb-4 w-full shadow-sm"
-            />
-
-            <label className="block text-left text-sm text-gray-600 mb-1">Course Rating</label>
-            <input
-              type="number"
-              step="0.1"
-              placeholder="e.g. 70.2"
-              value={courseRating}
-              onChange={(e) => setCourseRating(Number(e.target.value))}
-              className="border border-gray-300 p-2 rounded mb-4 w-full shadow-sm"
-            />
-
-            <label className="block text-left text-sm text-gray-600 mb-1">Slope Rating</label>
-            <input
-              type="number"
-              placeholder="55–155"
-              value={slopeRating}
-              onChange={(e) => setSlopeRating(Number(e.target.value))}
-              className="border border-gray-300 p-2 rounded w-full shadow-sm"
-            />
-          </div>
-
-          <div className="flex gap-6">
-            <button
-              onClick={() => {
-                setTotalHoles(9);
-                setSelectingHoles(false);
-              }}
-              className="bg-black text-white px-6 py-3 rounded-full text-lg font-medium hover:bg-green-600 transition"
-            >
-              9 Holes
-            </button>
-            <button
-              onClick={() => {
-                setTotalHoles(18);
-                setSelectingHoles(false);
-              }}
-              className="bg-black text-white px-6 py-3 rounded-full text-lg font-medium hover:bg-green-600 transition"
-            >
-              18 Holes
-            </button>
-          </div>
-        </div>
-      </>
-    );
-  }
 
   return (
     <>
-      <Navbar />
-      <div className="min-h-screen p-6 flex flex-col items-center bg-[#f9f9f9]">
-        <h1 className="text-3xl font-bold mb-2 text-center text-[#202334]">
-          Hole {hole} of {totalHoles}
-        </h1>
-        <h2 className="text-md mb-6 text-gray-600 italic">Course: {courseName}</h2>
-
-        {!roundFinished ? (
-          <>
+      <PageHeader title="Play a round">
+        Tell PinPro where you’re playing. Ratings are printed on the scorecard; the defaults are fine if you don’t
+        know them, but your handicap estimate will be less accurate.
+      </PageHeader>
+      <Card className="max-w-2xl">
+        <form onSubmit={handleSubmit} noValidate className="space-y-6">
+          <div>
+            <label htmlFor="course" className="mb-1.5 block text-sm font-medium text-slate-700">
+              Course name <span className="text-red-700" aria-hidden>*</span>
+            </label>
             <input
-              type="number"
-              placeholder="Distance to hole (yards)"
-              value={distance ?? ''}
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val === '') {
-                  setDistance(null);
-                } else {
-                  const parsed = parseInt(val, 10);
-                  setDistance(isNaN(parsed) ? null : parsed);
-                }
-              }}
-              className="border border-gray-300 p-3 rounded-lg w-80 text-center text-lg mb-4 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              id="course"
+              ref={courseRef}
+              required
+              autoComplete="off"
+              placeholder="e.g. Pebble Beach Golf Links"
+              value={form.courseName}
+              onChange={set('courseName')}
+              aria-invalid={errors.courseName ? true : undefined}
+              aria-describedby={errors.courseName ? 'course-error' : undefined}
+              className={cx(
+                'block min-h-11 w-full rounded-lg border bg-white px-3 py-2 text-base',
+                errors.courseName ? 'border-red-500' : 'border-slate-300 hover:border-slate-400'
+              )}
             />
-
-            <button
-              onClick={handleSuggest}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full text-lg mb-3 transition shadow"
-            >
-              Suggest Club
-            </button>
-
-            {suggestedClub && (
-              <p className="text-lg mb-4 text-[#202334]">
-                Suggested Club: <strong>{suggestedClub}</strong> 🏌️
-              </p>
-            )}
-
-            <button
-              onClick={handleTakeShot}
-              className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full text-lg mb-3 transition shadow"
-            >
-              Take Shot
-            </button>
-
-            <button
-              onClick={handleNextHole}
-              className="bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-full text-lg mt-2 transition"
-            >
-              Next Hole
-            </button>
-
-            <button
-              onClick={handleEndRound}
-              className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-full text-lg mt-3 transition"
-            >
-              End Round
-            </button>
-
-            <div className="mt-8 w-full max-w-md bg-white p-4 rounded-xl border shadow-md">
-              <h3 className="text-xl font-semibold mb-3 text-center text-[#202334]">Shot History</h3>
-              <ul className="list-disc list-inside text-left text-gray-700 space-y-1">
-                {shots.map((shot, index) => (
-                  <li key={index}>
-                    Hole {index + 1}: <strong>{shot.distance} yards</strong> — {shot.club}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </>
-        ) : (
-          <div className="text-center mt-10 bg-white p-6 rounded-xl shadow border w-full max-w-lg">
-            <h2 className="text-3xl font-bold text-green-600 mb-4">Round Complete!</h2>
-            <p className="text-lg mb-2">Total Shots: <strong>{score}</strong></p>
-            <p className="text-lg mb-2">Par: {totalHoles === 9 ? 36 : 72}</p>
-            <p className="text-lg">
-              Final Score:{' '}
-              <span className={score - (totalHoles === 9 ? 36 : 72) >= 0 ? 'text-red-600' : 'text-green-600'}>
-                {score - (totalHoles === 9 ? 36 : 72) >= 0
-                  ? `+${score - (totalHoles === 9 ? 36 : 72)}`
-                  : score - (totalHoles === 9 ? 36 : 72)}
-              </span>
-            </p>
+            {errors.courseName && <p id="course-error" className="mt-1.5 text-sm text-red-700">{errors.courseName}</p>}
           </div>
-        )}
-      </div>
+
+          <fieldset>
+            <legend className="mb-1.5 text-sm font-medium text-slate-700">Holes</legend>
+            <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+              {([9, 18] as const).map((holes) => (
+                <label
+                  key={holes}
+                  className={cx(
+                    'flex min-h-11 cursor-pointer items-center justify-center rounded-lg font-semibold transition-colors has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-fairway',
+                    form.totalHoles === holes ? 'bg-white text-navy shadow-sm' : 'text-slate-600 hover:text-navy'
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="holes"
+                    value={holes}
+                    checked={form.totalHoles === holes}
+                    onChange={() => chooseHoles(holes)}
+                    className="sr-only"
+                  />
+                  {holes} holes
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <div className="grid gap-5 sm:grid-cols-3">
+            <Input label="Par" inputMode="numeric" value={form.par} onChange={set('par')} error={errors.par} />
+            <Input
+              label="Course rating"
+              inputMode="decimal"
+              value={form.courseRating}
+              onChange={set('courseRating')}
+              error={errors.courseRating}
+            />
+            <Input
+              label="Slope rating"
+              inputMode="numeric"
+              value={form.slopeRating}
+              onChange={set('slopeRating')}
+              error={errors.slopeRating}
+            />
+          </div>
+
+          <Button type="submit" className="w-full sm:w-auto">Start round</Button>
+        </form>
+      </Card>
+    </>
+  );
+};
+
+type Finished = SavedRound & Pick<RoundDraft, 'courseName' | 'totalHoles' | 'par'>;
+
+const RoundComplete = ({ round, onNew }: { round: Finished; onNew: () => void }) => (
+  <Card className="mx-auto max-w-lg text-center sm:p-10">
+    <div className="mx-auto mb-4 w-fit rounded-full bg-fairway-soft p-3 text-fairway">
+      <CheckIcon className="h-8 w-8" />
+    </div>
+    <h1 className="text-3xl font-bold tracking-tight text-navy">Round saved</h1>
+    <p className="mt-1 text-slate-600">{round.courseName} · {round.totalHoles} holes</p>
+    <dl className="mt-8 grid grid-cols-3 gap-3">
+      {[
+        ['Strokes', String(round.shots)],
+        ['Par', String(round.par)],
+        ['To par', formatToPar(round.finalScore)],
+      ].map(([label, value]) => (
+        <div key={label} className="rounded-xl bg-slate-50 py-4">
+          <dt className="text-sm text-slate-500">{label}</dt>
+          <dd className="mt-1 text-2xl font-bold text-navy">{value}</dd>
+        </div>
+      ))}
+    </dl>
+    <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+      <Link
+        to="/profile"
+        className="inline-flex min-h-11 items-center justify-center rounded-lg bg-fairway px-5 font-semibold text-white hover:bg-fairway-dark"
+      >
+        See your stats
+      </Link>
+      <Button variant="secondary" onClick={onNew}>Play another round</Button>
+    </div>
+  </Card>
+);
+
+const StartRound = () => {
+  usePageTitle('Play a round');
+  const userId = useSession()!.user.id; // this page only renders for signed-in users
+  const [draft, setDraft] = useState<RoundDraft | null>(() => loadDraft(userId));
+  const [resumed] = useState(() => draft !== null && draft.shots.length > 0);
+  const [finished, setFinished] = useState<Finished | null>(null);
+  const clubs = useApi<{ clubs: Yardages }>('/api/clubs');
+
+  useEffect(() => {
+    if (draft) saveDraft(userId, draft);
+  }, [draft, userId]);
+
+  if (finished) return <RoundComplete round={finished} onNew={() => setFinished(null)} />;
+  if (!draft) return <SetupRound onStart={(setup) => setDraft({ ...setup, hole: 1, shots: [] })} />;
+
+  return (
+    <>
+      {resumed && <Alert className="mb-5">Picked up where you left off.</Alert>}
+      <RoundPlay
+        draft={draft}
+        setDraft={setDraft}
+        yardages={clubs.data?.clubs ?? null}
+        clubsError={clubs.error}
+        onRetryClubs={clubs.reload}
+        onSaved={(saved) => {
+          clearDraft(userId);
+          setFinished({ ...saved, courseName: draft.courseName, totalHoles: draft.totalHoles, par: draft.par });
+          setDraft(null);
+        }}
+        onAbandon={() => {
+          clearDraft(userId);
+          setDraft(null);
+        }}
+      />
     </>
   );
 };

@@ -1,18 +1,17 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.verifyAuth = void 0;
-const firebaseAdmin_1 = require("../firebaseAdmin");
-const verifyAuth = async (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'No token provided' });
+const jwt_1 = require("../lib/jwt");
+// Every clubs/rounds request is scoped to the user in the signed token, never a client-sent id.
+const verifyAuth = (req, res, next) => {
+    const header = req.headers.authorization;
+    const token = header?.startsWith('Bearer ') ? header.slice(7) : null;
+    const userId = token ? (0, jwt_1.verifySession)(token) : null;
+    if (!userId) {
+        res.status(401).json({ error: 'Your session has expired. Please log in again.' });
+        return;
     }
-    const token = authHeader.split(' ')[1];
-    const decoded = await (0, firebaseAdmin_1.verifyFirebaseToken)(token);
-    if (!decoded) {
-        return res.status(401).json({ error: 'Invalid or expired token' });
-    }
-    req.user = decoded;
+    req.userId = userId;
     next();
 };
 exports.verifyAuth = verifyAuth;

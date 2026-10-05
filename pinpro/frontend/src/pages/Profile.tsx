@@ -1,193 +1,165 @@
-import { useEffect, useState } from 'react';
-import { Line } from 'react-chartjs-2';
-import Navbar from '../components/Navbar';
-import {
-  Chart as ChartJS,
-  LineElement,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  Tooltip,
-} from 'chart.js';
+import { lazy, Suspense } from 'react';
+import { Link } from 'react-router-dom';
+import { ChartIcon, FlagIcon } from '../components/icons';
+import { Alert, Button, Card, EmptyState, Loading, PageHeader } from '../components/ui';
+import { formatHandicap, formatToPar } from '../lib/golf';
+import { statsFor, type RoundsResponse } from '../lib/rounds';
+import { useSession } from '../lib/session';
+import { useApi } from '../lib/useApi';
+import { usePageTitle } from '../lib/usePageTitle';
 
-ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Tooltip);
+const ScoreChart = lazy(() => import('../components/ScoreChart'));
 
-interface Round {
-  id: number;
-  total_holes: number;
-  shots: number;
-  final_score: number;
-  par: number;
-  created_at: string;
-  course_name: string;
-}
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+
+const Stat = ({ label, value, note }: { label: string; value: string; note?: string }) => (
+  <Card className="sm:p-5">
+    <p className="text-sm font-medium text-slate-500">{label}</p>
+    <p className="mt-1 text-3xl font-bold tracking-tight text-navy">{value}</p>
+    {note && <p className="mt-1 text-sm text-slate-500">{note}</p>}
+  </Card>
+);
 
 const Profile = () => {
-  const [userId, setUserId] = useState<string | null>(null);
-  const [rounds, setRounds] = useState<Round[]>([]);
-  const [handicap, setHandicap] = useState<number>(0);
-  const [showChart, setShowChart] = useState(false);
+  usePageTitle('Profile');
+  const username = useSession()!.user.username;
+  const { data, error, loading, reload } = useApi<RoundsResponse>('/api/rounds');
 
-  // 🔄 Listen for userId updates (e.g. after Google login)
-  useEffect(() => {
-    const updateUserId = () => {
-      const storedId = localStorage.getItem('userId');
-      if (storedId && storedId !== 'undefined') {
-        setUserId(storedId);
-      } else {
-        setUserId(null);
-      }
-    };
+  if (loading && !data) return <Loading label="Loading your rounds…" />;
+  if (error && !data) {
+    return (
+      <>
+        <PageHeader title="Your game" />
+        <Alert tone="error" action={<Button variant="secondary" onClick={reload}>Try again</Button>}>
+          Couldn’t load your rounds. {error}
+        </Alert>
+      </>
+    );
+  }
 
-    updateUserId(); // on first load
-    window.addEventListener('storage', updateUserId); // on localStorage updates
-
-    return () => window.removeEventListener('storage', updateUserId);
-  }, []);
-
-  // 🏌 Fetch round data once userId is available
-  useEffect(() => {
-    if (!userId) return;
-
-    fetch(`https://pinpro.onrender.com/api/rounds/${userId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setRounds(data.rounds || []);
-        setHandicap(data.handicap ?? 0);
-      })
-      .catch((err) => {
-        console.error('Error fetching rounds:', err);
-        setRounds([]);
-        setHandicap(0);
-      });
-  }, [userId]);
-
-  const totalRounds = rounds.length;
-  const bestScore = rounds.reduce((best, r) => (r.final_score < best ? r.final_score : best), 999);
-  const averageScore = rounds.length
-    ? Math.round(rounds.reduce((acc, r) => acc + r.final_score, 0) / rounds.length)
-    : 0;
-
-  const formatScore = (score: number) => {
-    if (score === 0) return 'E';
-    return score > 0 ? `+${score}` : `${score}`;
-  };
-
-  const chartData = {
-    labels: rounds.map((_r, i) => `Round ${i + 1}`),
-    datasets: [
-      {
-        label: 'Final Score',
-        data: rounds.map((r) => r.final_score),
-        borderColor: '#2563eb',
-        backgroundColor: '#93c5fd',
-        tension: 0.2,
-        pointRadius: 4,
-      },
-    ],
-  };
+  const { rounds, handicap } = data!;
+  const eighteen = statsFor(rounds, 18);
+  const nine = statsFor(rounds, 9);
+  const needed = handicap.minimumRounds - handicap.roundsConsidered;
 
   return (
     <>
-      <Navbar />
-      {!userId ? (
-        <div className="min-h-screen flex items-center justify-center text-center text-red-600 text-xl">
-          ⚠️ No user ID found. Please log in again.
-        </div>
+      <PageHeader title="Your game" eyebrow={username} />
+
+      <section aria-label="Stats" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <Stat
+          label="Handicap estimate"
+          value={handicap.value === null ? '—' : formatHandicap(handicap.value)}
+          note={
+            handicap.value === null
+              ? `Play ${needed} more 18-hole ${needed === 1 ? 'round' : 'rounds'}`
+              : `Best ${handicap.roundsUsed} of last ${handicap.roundsConsidered} rounds`
+          }
+        />
+        <Stat
+          label="Rounds played"
+          value={String(rounds.length)}
+          note={rounds.length ? `${eighteen?.count ?? 0} × 18 · ${nine?.count ?? 0} × 9` : undefined}
+        />
+        <Stat
+          label="Best 18"
+          value={eighteen ? formatToPar(eighteen.best) : '—'}
+          note={nine ? `Best 9: ${formatToPar(nine.best)}` : undefined}
+        />
+        <Stat
+          label="Average 18"
+          value={eighteen ? formatToPar(eighteen.average) : '—'}
+          note={nine ? `Average 9: ${formatToPar(nine.average)}` : undefined}
+        />
+      </section>
+      <p className="mt-3 text-sm text-slate-500">
+        The handicap is an estimate using the World Handicap System’s “best of last 20” method on your 18-hole
+        rounds. It isn’t an official Handicap Index.
+      </p>
+
+      {rounds.length === 0 ? (
+        <Card className="mt-8">
+          <EmptyState
+            icon={<FlagIcon className="h-6 w-6" />}
+            title="No rounds yet"
+            action={
+              <Link to="/start" className="inline-flex min-h-11 items-center rounded-lg bg-fairway px-5 font-semibold text-white hover:bg-fairway-dark">
+                Play your first round
+              </Link>
+            }
+          >
+            Finish a round and your scores, history and handicap estimate show up here.
+          </EmptyState>
+        </Card>
       ) : (
-        <div className="min-h-screen bg-[#f7f9fb] px-4 py-8">
-          <div className="max-w-5xl mx-auto">
-            <h1 className="text-4xl font-bold text-primary mb-6 text-center">Player Profile</h1>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-              <div className="bg-white shadow-lg rounded-lg p-6 border border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">User Info</h2>
-                <p className="text-gray-700 mb-2">
-                  User ID: <span className="italic text-gray-600">{userId}</span>
-                </p>
-                <p className="text-gray-700">
-                  Rounds Played: <span className="font-semibold">{totalRounds}</span>
-                </p>
-              </div>
-
-              <div
-                onClick={() => setShowChart(!showChart)}
-                className="bg-white shadow-lg rounded-lg p-6 border border-gray-200 cursor-pointer hover:shadow-xl transition"
-              >
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">Stats Summary</h2>
-                <p className="text-gray-700 mb-2">
-                  Best Score:{' '}
-                  <span className={bestScore >= 0 ? 'text-red-500' : 'text-green-600'}>
-                    {totalRounds > 0 ? formatScore(bestScore) : 'N/A'}
-                  </span>
-                </p>
-                <p className="text-gray-700 mb-2">
-                  Average Score:{' '}
-                  <span className={averageScore >= 0 ? 'text-red-500' : 'text-green-600'}>
-                    {totalRounds > 0 ? formatScore(averageScore) : 'N/A'}
-                  </span>
-                </p>
-                <p className="text-gray-700">
-                  Handicap:{' '}
-                  <span className={handicap >= 0 ? 'text-red-500' : 'text-green-600'}>
-                    {handicap === 0 ? 'E' : formatScore(handicap)}
-                  </span>
-                </p>
-              </div>
-            </div>
-
-            {showChart && totalRounds > 0 && (
-              <div className="bg-white rounded-lg p-6 mb-8 border border-gray-200 shadow">
-                <h3 className="text-lg font-semibold mb-4">Score Progression</h3>
-                <Line data={chartData} />
+        <>
+          <Card className="mt-8">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-navy">
+              <ChartIcon className="h-5 w-5 text-fairway" /> Score to par
+            </h2>
+            {rounds.length < 2 ? (
+              <p className="mt-3 text-slate-600">Play one more round to see your trend.</p>
+            ) : (
+              <div className="mt-4 h-64">
+                <Suspense fallback={<Loading label="Loading chart…" />}>
+                  <ScoreChart rounds={rounds.slice(0, 20)} />
+                </Suspense>
               </div>
             )}
+          </Card>
 
-            <h2 className="text-2xl font-semibold text-primary mb-4">Past Rounds</h2>
-            <div className="overflow-x-auto shadow border border-gray-200 rounded-lg">
-              <table className="w-full bg-white text-left">
-                <thead>
-                  <tr className="bg-gray-100 text-gray-700">
-                    <th className="p-3 border">Date</th>
-                    <th className="p-3 border">Course</th>
-                    <th className="p-3 border">Holes</th>
-                    <th className="p-3 border">Shots</th>
-                    <th className="p-3 border">Score</th>
+          <section className="mt-8" aria-labelledby="history">
+            <h2 id="history" className="mb-4 text-xl font-semibold text-navy">Round history</h2>
+
+            {/* Phones: cards */}
+            <ul className="space-y-3 md:hidden">
+              {rounds.map((r) => (
+                <li key={r.id}>
+                  <Card className="flex items-center justify-between gap-4 sm:p-5">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-slate-800">{r.course_name || 'Unnamed course'}</p>
+                      <p className="text-sm text-slate-500">
+                        {formatDate(r.created_at)} · {r.total_holes} holes · {r.shots} strokes
+                      </p>
+                    </div>
+                    <p className="text-2xl font-bold text-navy" aria-label={`${formatToPar(r.final_score)} to par`}>
+                      {formatToPar(r.final_score)}
+                    </p>
+                  </Card>
+                </li>
+              ))}
+            </ul>
+
+            {/* Larger screens: table */}
+            <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:block">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50 text-sm text-slate-600">
+                  <tr>
+                    <th scope="col" className="px-5 py-3 font-medium">Date</th>
+                    <th scope="col" className="px-5 py-3 font-medium">Course</th>
+                    <th scope="col" className="px-5 py-3 text-right font-medium">Holes</th>
+                    <th scope="col" className="px-5 py-3 text-right font-medium">Strokes</th>
+                    <th scope="col" className="px-5 py-3 text-right font-medium">Par</th>
+                    <th scope="col" className="px-5 py-3 text-right font-medium">To par</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {rounds.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="text-center p-4 text-gray-500 italic">
-                        No rounds yet
-                      </td>
+                <tbody className="divide-y divide-slate-100">
+                  {rounds.map((r) => (
+                    <tr key={r.id} className="hover:bg-slate-50">
+                      <td className="whitespace-nowrap px-5 py-3 text-slate-600">{formatDate(r.created_at)}</td>
+                      <td className="px-5 py-3 font-medium text-slate-800">{r.course_name || 'Unnamed course'}</td>
+                      <td className="px-5 py-3 text-right">{r.total_holes}</td>
+                      <td className="px-5 py-3 text-right">{r.shots}</td>
+                      <td className="px-5 py-3 text-right">{r.par}</td>
+                      <td className="px-5 py-3 text-right font-semibold text-navy">{formatToPar(r.final_score)}</td>
                     </tr>
-                  ) : (
-                    rounds.map((round) => (
-                      <tr key={round.id} className="hover:bg-gray-50">
-                        <td className="p-3 border">
-                          {new Date(round.created_at).toLocaleDateString()}
-                        </td>
-                        <td className="p-3 border font-semibold italic text-blue-600">
-                          {round.course_name || '—'}
-                        </td>
-                        <td className="p-3 border">{round.total_holes}</td>
-                        <td className="p-3 border">{round.shots}</td>
-                        <td
-                          className={`p-3 border font-medium ${
-                            round.final_score >= 0 ? 'text-red-600' : 'text-green-600'
-                          }`}
-                        >
-                          {formatScore(round.final_score)}
-                        </td>
-                      </tr>
-                    ))
-                  )}
+                  ))}
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
+          </section>
+        </>
       )}
     </>
   );

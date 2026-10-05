@@ -1,75 +1,51 @@
-// src/App.tsx
-import { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import AppShell from './components/AppShell';
+import { useSession } from './lib/session';
 import Home from './pages/Home';
 import Login from './pages/Login';
-import Register from './pages/Register';
 import Profile from './pages/Profile';
-import StartRound from './pages/StartRound';
+import Register from './pages/Register';
 import Setup from './pages/Setup';
-import ProtectedRoute from './components/ProtectedRoutes';
+import StartRound from './pages/StartRound';
+
+// Logged-out visitors to a deep link go to /login and come back afterwards.
+const ToLogin = () => {
+  const location = useLocation();
+  return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
+};
+
+const AfterLogin = ({ fallback }: { fallback: string }) => {
+  const from = (useLocation().state as { from?: string } | null)?.from;
+  return <Navigate to={from && from !== '/login' ? from : fallback} replace />;
+};
 
 function App() {
-  const [authChecked, setAuthChecked] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  const checkAuth = () => {
-    const token = localStorage.getItem('token') || localStorage.getItem('firebaseToken');
-    setIsAuthenticated(!!token);
-    setAuthChecked(true);
-  };
-
-  useEffect(() => {
-    checkAuth();
-    window.addEventListener('storage', checkAuth);
-    return () => window.removeEventListener('storage', checkAuth);
-  }, []);
-
-  if (!authChecked) return null;
+  const session = useSession();
 
   return (
-    <Router>
+    <BrowserRouter>
       <Routes>
-        {!isAuthenticated ? (
+        {session ? (
           <>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="*" element={<Navigate to="/login" />} />
+            <Route element={<AppShell />}>
+              <Route path="/" element={<Home />} />
+              <Route path="/start" element={<StartRound />} />
+              <Route path="/setup" element={<Setup />} />
+              <Route path="/profile" element={<Profile />} />
+            </Route>
+            <Route path="/login" element={<AfterLogin fallback="/" />} />
+            <Route path="/register" element={<AfterLogin fallback="/setup?welcome=1" />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </>
         ) : (
           <>
-            <Route path="/" element={<Home />} />
-            <Route path="/login" element={<Navigate to="/" />} />
-            <Route path="/register" element={<Navigate to="/" />} />
-            <Route
-              path="/profile"
-              element={
-                <ProtectedRoute>
-                  <Profile />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/start"
-              element={
-                <ProtectedRoute>
-                  <StartRound />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/setup"
-              element={
-                <ProtectedRoute>
-                  <Setup />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="*" element={<Navigate to="/" />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="*" element={<ToLogin />} />
           </>
         )}
       </Routes>
-    </Router>
+    </BrowserRouter>
   );
 }
 

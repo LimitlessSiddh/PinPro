@@ -1,23 +1,49 @@
 # Development Guide
 
-How to run PinPro locally, from a fresh clone.
+How to run and test PinPro locally, from a fresh clone.
 
 ## Layout
 
 ```
 pinpro/
   backend/    Express + TypeScript API, Postgres (pg), Firebase Admin
-  frontend/   React 19 + Vite + Tailwind 4 SPA, Firebase Auth (client), Google Maps
+    db/schema.sql   schema the code expects (used for test databases)
+    test/           node:test API + handicap tests
+  frontend/   React 19 + Vite + Tailwind 4 SPA, Firebase Auth (client, lazy-loaded), Google Maps
+    e2e/            Playwright journeys
+docs/         this guide, DESIGN.md, before/after screenshots
 dataconnect/, firebase.json, .firebaserc   Firebase CLI scaffolding (unused by the app)
 ```
 
 ## Prerequisites
 
-- **Node 18** (pinned in `pinpro/backend/.node-version` and `engines`; Render uses it). Newer Node builds fine locally but prints an `EBADENGINE` warning.
+- **Node 18** for the backend (pinned in `pinpro/backend/.node-version` and `engines`; Render uses it). Tests and builds also run on newer Node.
 - npm (lockfiles are committed: use `npm ci`).
-- A Postgres database.
-- A Firebase project with Email/Google sign-in, a web app config, and a service account.
-- A Google Maps JavaScript API key (Places library enabled).
+- PostgreSQL (local, for development and tests).
+- Optional: a Firebase project (Google sign-in) and a Google Maps key (course autocomplete). The app runs without both; the Google button and autocomplete simply don't appear.
+
+## How auth works
+
+There is **one session model**: the backend issues its own JWT (7 days) on register, login, or Google sign-in.
+
+- Google: the client gets a Firebase ID token, `POST /api/auth/sync-firebase-user` verifies it (and requires a verified email), and the backend returns its JWT. The Firebase session is signed out right away.
+- The frontend stores `{ token, user }` under the `pinpro.session` localStorage key (`src/lib/session.ts`). All calls go through `apiFetch` (`src/lib/api.ts`), which sends `Authorization: Bearer <token>` and returns the user to login on a 401.
+- Clubs and rounds routes use `verifyAuth`. The user is **always** taken from the token, never from the URL or body.
+
+## API
+
+| Endpoint | Auth | Notes |
+|---|---|---|
+| `POST /api/auth/register` | – | username 3–30 chars `[A-Za-z0-9_.-]` (no `@`), password ≥ 8 → `{ token, user }` |
+| `POST /api/auth/login` | – | → `{ token, user }` |
+| `POST /api/auth/sync-firebase-user` | Firebase ID token | 409 if the email is already a password account's username (no silent linking) |
+| `GET /api/clubs` | JWT | `{ clubs: { "7 Iron": 150, … } }`, numbers |
+| `PUT /api/clubs` | JWT | replaces the whole set in one transaction; known club names, whole yards 1–400 |
+| `GET /api/rounds` | JWT | `{ rounds, handicap: { value, roundsUsed, roundsConsidered, minimumRounds } }` |
+| `POST /api/rounds` | JWT | `{ courseName, totalHoles, par, courseRating, slopeRating, shotData }`; strokes and score are computed server-side |
+| `GET /api/health` | – | `{ ok: true }` |
+
+**Handicap** (`backend/src/lib/handicap.ts`) is an *estimate* modelled on WHS Rule 5.2: the last 20 18-hole rounds, the lowest N differentials from the WHS table (with adjustments for 3, 4 and 6 rounds), at least 3 rounds required, rounded to 0.1, capped at 54. It uses gross score because there are no per-hole pars, so there's no net-double-bogey cap and no PCC. 9-hole rounds are excluded. It's computed on read; `users.handicap` is no longer written.
 
 ## 1. Backend
 
@@ -30,81 +56,60 @@ npm run dev               # ts-node src/index.ts → http://localhost:5050
 
 | Script | Does |
 |---|---|
-| `npm run dev` | Runs `src/index.ts` with ts-node (no reload; `nodemon` is installed but unused) |
-| `npm run build` | `tsc` → `dist/` |
+| `npm run dev` | Runs `src/index.ts` with ts-node |
+| `npm run build` | `tsc` → `dist/` (**commit it**, see Deploy) |
 | `npm start` | `node dist/index.js` (what production runs) |
+| `npm run test:db` | Creates the local `pinpro_test` database from `db/schema.sql` |
+| `npm test` | API + handicap tests against `pinpro_test` (refuses any other DB) |
 
 ### Env vars (`pinpro/backend/.env`)
 
-| Var | Used in | Notes |
-|---|---|---|
-| `DATABASE_URL` | `src/db.ts` | Postgres connection string |
-| `NODE_ENV` | `src/db.ts` | `production` turns on SSL (`rejectUnauthorized: false`) |
-| `PORT` | `src/index.ts` | Default `5050` |
-| `JWT_SECRET` | `src/controllers/authController.ts` | Falls back to `dev_secret` if unset |
-| `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | `src/firebaseAdmin.ts` | Service-account creds. Private key uses literal `\n`. Missing/invalid values crash startup |
+| Var | Notes |
+|---|---|
+| `DATABASE_URL` | Postgres connection string. **Point local dev at a local DB**, not production. |
+| `NODE_ENV` | `production` turns on SSL and makes `JWT_SECRET` mandatory |
+| `PORT` | Default `5050` |
+| `JWT_SECRET` | Required in production (the server refuses to start without it). Dev-only fallback otherwise. |
+| `FIREBASE_PROJECT_ID` | **Required for Google sign-in.** Must equal the frontend's `VITE_FIREBASE_PROJECT_ID` (currently `pinpro-c635b`). Verifying ID tokens needs only this; read on first Google login, not at boot. |
+| `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | Optional service account. Used only if both are set (private key uses literal `\n`). |
 
-### Database
-
-There are no migrations. Tables inferred from the SQL in the controllers:
-
-```sql
-CREATE TABLE users (
-  id            SERIAL PRIMARY KEY,
-  username      TEXT UNIQUE NOT NULL,   -- email for Google users
-  password_hash TEXT,                   -- null for Google users
-  firebase_uid  TEXT,
-  handicap      NUMERIC
-);
-CREATE TABLE clubs (
-  user_id  INTEGER REFERENCES users(id),
-  name     TEXT,
-  distance NUMERIC
-);
-CREATE TABLE rounds (
-  id            SERIAL PRIMARY KEY,
-  user_id       INTEGER REFERENCES users(id),
-  total_holes   INTEGER,
-  shots         INTEGER,
-  final_score   INTEGER,                -- relative to par
-  par           INTEGER,
-  shot_data     JSONB,
-  course_name   TEXT,
-  slope_rating  NUMERIC,
-  course_rating NUMERIC,
-  created_at    TIMESTAMPTZ DEFAULT now()
-);
-```
-
-Column types are a best guess. Check against the production DB before relying on them.
+CORS allows `https://pin-pro.vercel.app`, plus any `http://localhost:<port>` when `NODE_ENV` isn't `production`.
 
 ## 2. Frontend
 
 ```bash
 cd pinpro/frontend
 npm ci
-cp .env.example .env.local   # fill in values (*.local is gitignored)
+cp .env.example .env.local   # *.local is gitignored
 npm run dev                  # http://localhost:5173
 ```
 
+| Var | Notes |
+|---|---|
+| `VITE_API_URL` | API base URL. **Defaults to production** (`https://pinpro.onrender.com`); set `http://localhost:5050` for local work |
+| `VITE_FIREBASE_*` | Optional. Without `VITE_FIREBASE_API_KEY` the Google button is hidden. For local Google sign-in, add `localhost` to Firebase → Authentication → Authorized domains |
+| `VITE_GOOGLE_MAPS_API_KEY` | Optional. Enables course-name autocomplete |
+
 | Script | Does |
 |---|---|
-| `npm run dev` | Vite dev server |
-| `npm run build` | `tsc -b && vite build` → `dist/` (gitignored) |
-| `npm run lint` | ESLint. Currently reports 6 pre-existing errors (unused catch vars, `any` in StartRound) |
-| `npm run preview` | Serve the built bundle |
+| `npm run build` | `tsc -b && vite build` |
+| `npm run lint` | ESLint (clean) |
+| `npm test` | Vitest unit tests (`src/**/*.test.ts`) |
+| `npm run test:e2e` | Playwright: starts the real backend on `:5051` against `pinpro_e2e` and Vite on `:5174`, truncates `pinpro_e2e` first |
 
-Env vars: `VITE_FIREBASE_*` (six web-app config values) and `VITE_GOOGLE_MAPS_API_KEY`. See `.env.example`.
+One-time E2E setup: `createdb pinpro_e2e && psql -d pinpro_e2e -f ../backend/db/schema.sql && npx playwright install chromium`.
 
-> ⚠️ **The frontend always talks to the production API.** `https://pinpro.onrender.com` is hard-coded in `Login`, `Register`, `Setup`, `StartRound`, `Profile`, and `GoogleLoginButton`. Running both halves locally does **not** connect them; the local frontend reads and writes production data. To point it at `localhost:5050` you currently have to edit those URLs (an `API_URL` env var would be the fix).
+E2E coverage: register and onboarding, clubs persistence and validation, a 9-hole round (suggestions, validation, resume after refresh), an 18-hole round with the handicap rule, logout and deep-link login, expired/forged and legacy sessions, Google sign-in success and failure (popup stubbed via `window.__pinproGoogleToken` in `--mode test` only), no horizontal overflow and labelled inputs at 375/768/1024/1440, skip link and focus. Every test fails on unexpected console errors.
+
+Real Google sign-in can't be automated (it needs a Google account); verify it by hand after any auth change.
 
 ## 3. Deploy
 
 | Half | Host | How |
 |---|---|---|
-| Frontend | Vercel (`pin-pro.vercel.app`) | Builds `pinpro/frontend`. `vercel.json` rewrites every non-file path to `/` for client-side routing |
+| Frontend | Vercel (`pin-pro.vercel.app`) | Builds `pinpro/frontend`. `vercel.json` rewrites every non-file path to `/` |
 | Backend | Render (`pinpro.onrender.com`) | Runs `npm start` → `node dist/index.js` on Node 18 |
 
-**`pinpro/backend/dist/` is committed on purpose.** Render's build command isn't recorded anywhere in the repo, and Render may be serving the committed build. Until that's confirmed, **after any backend change run `npm run build` and commit `dist/` with the source.** If Render's build command does run `npm run build`, add `dist/` to `pinpro/backend/.gitignore` and untrack it.
+**`pinpro/backend/dist/` is committed on purpose.** Render's build command isn't recorded in the repo, so after any backend change run `npm run build` and commit `dist/` with the source. If Render does run `npm run build`, add `dist/` to `.gitignore` and untrack it.
 
-CORS allows only `http://localhost:5173` and `https://pin-pro.vercel.app` (`src/index.ts`).
+The API contract changed in the 2026-10 refresh (token auth, no `userId` in paths). Deploy the backend and frontend together, backend first.
